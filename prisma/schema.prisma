@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  documents    Document[]
+  auditLogs    AuditLog[]
+}
+
+model Document {
+  id         String         @id @default(cuid())
+  title      String
+  fileName   String
+  s3Key      String
+  finalS3Key String?
+  status     DocumentStatus @default(DRAFT)
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipients Recipient[]
+  fields     Field[]
+  auditLogs  AuditLog[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([userId])
+}
+
+enum DocumentStatus {
+  DRAFT
+  SENT
+  COMPLETED
+  CANCELLED
+}
+
+model Recipient {
+  id         String          @id @default(cuid())
+  email      String
+  name       String
+  order      Int
+  status     RecipientStatus @default(PENDING)
+  token      String          @unique
+  expiresAt  DateTime?
+  documentId String
+  document   Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  signatures Signature[]
+  signedAt   DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@index([documentId])
+  @@index([token])
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  VIEWED
+  SIGNED
+}
+
+model Field {
+  id          String    @id @default(cuid())
+  type        FieldType
+  page        Int
+  x           Float
+  y           Float
+  width       Float
+  height      Float
+  required    Boolean   @default(true)
+  recipientId String?
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  signature   Signature?
+  createdAt   DateTime  @default(now())
+
+  @@index([documentId])
+}
+
+enum FieldType {
+  SIGNATURE
+  TEXT
+  DATE
+}
+
+model Signature {
+  id          String        @id @default(cuid())
+  fieldId     String        @unique
+  field       Field         @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  recipientId String
+  recipient   Recipient     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  value       String
+  type        SignatureType
+  createdAt   DateTime      @default(now())
+}
+
+enum SignatureType {
+  DRAWN
+  TYPED
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  action     String
+  ip         String?
+  userAgent  String?
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+
+  @@index([documentId])
+  @@index([userId])
+}
